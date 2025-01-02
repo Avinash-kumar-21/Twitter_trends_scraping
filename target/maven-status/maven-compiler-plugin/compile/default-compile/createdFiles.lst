@@ -1,0 +1,7 @@
+com\trends\models\TrendRecord.class
+com\trends\App.class
+com\trends\web\WebServer$1.class
+com\trends\scraper\TwitterScraper.class
+com\trends\web\WebServer.class
+com\trends\db\MongoDBHandler.class
+com\trends\utils\ProxyConfiguration.class
