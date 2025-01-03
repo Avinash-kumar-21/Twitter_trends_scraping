@@ -1,6 +1,5 @@
 package com.trends.utils;
 
-import org.json.JSONObject;
 import org.openqa.selenium.Proxy;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -8,10 +7,8 @@ import org.openqa.selenium.chrome.ChromeOptions;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.InetSocketAddress;
-import java.net.Proxy.Type;
-import java.net.URL;
+import java.io.OutputStream;
+import java.net.Socket;
 import java.util.Base64;
 
 public class ProxyConfiguration {
@@ -23,7 +20,10 @@ public class ProxyConfiguration {
     private static final String PROXY_PASSWORD = " Password"; // Password
 
     private static String currentProxyIP = "127.0.0.1"; // Default IP
-
+// HTTP Request through ProxyMesh
+    public static String getProxyIPAddress() {
+        return currentProxyIP;
+    }
     // HTTP Request through ProxyMesh
     public static String getProxyIPAddress() {
         try {
@@ -75,10 +75,70 @@ public class ProxyConfiguration {
 
         ChromeOptions options = new ChromeOptions();
         options.setProxy(seleniumProxy);
-
+ currentProxyIP=connectToProxy();
         // Optional: Add arguments for debugging or specific configurations
         options.addArguments("--proxy-server=" + PROXY_HOST + ":" + PROXY_PORT);
 
         return new ChromeDriver(options);
+    }
+     public static String connectToProxy() {
+        try {
+            // Establish socket connection to proxy
+            Socket socket = new Socket(PROXY_HOST, PROXY_PORT);
+    
+            // Build the CONNECT request with Proxy-Authorization header
+            String connectRequest = 
+                "CONNECT api.ipify.org:443 HTTP/1.1\r\n" +
+                "Host: api.ipify.org:443\r\n" +
+                "Proxy-Authorization: Basic " + 
+                Base64.getEncoder()
+                      .encodeToString((PROXY_USERNAME + ":" + PROXY_PASSWORD).getBytes()) + "\r\n" +
+                "\r\n";
+    
+            // Send CONNECT request
+            OutputStream outputStream = socket.getOutputStream();
+            outputStream.write(connectRequest.getBytes());
+            outputStream.flush();
+    
+            // Read proxy response
+            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            String responseLine;
+            StringBuilder response = new StringBuilder();
+    
+            while ((responseLine = reader.readLine()) != null && !responseLine.isEmpty()) {
+                response.append(responseLine).append("\n");
+            }
+    
+            System.out.println("Proxy Response:\n" + response);
+    
+            // Check if CONNECT was successful (HTTP 200)
+            if (!response.toString().contains("200 Connection established")) {
+                System.err.println("Failed to establish connection via proxy.");
+                socket.close();
+
+                return "unknown";
+
+            }
+    
+            // Extract the X-ProxyMesh-IP from the response
+            String proxyIP = "unknown";
+            for (String line : response.toString().split("\n")) {
+                if (line.startsWith("X-ProxyMesh-IP:")) {
+                    proxyIP = line.split(":")[1].trim();
+                    break;
+                }
+            }
+    
+            // Proceed to TLS handshake for secure communication (if necessary)
+            System.out.println("CONNECT successful. Proceeding to TLS handshake...");
+            socket.close();
+    
+            return proxyIP;
+    
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    
     }
 }
